@@ -341,8 +341,16 @@ namespace User32Api {
                 return (ushort)Input.GetLowOrder(VkKeyScanA((byte)key));
             }
 
+            public static bool SetState(ushort key, bool keyDown) {
+                return SetState(key, keyDown, Default_VirtualKeys);
+            }
+
             public static bool SetState(ushort key, bool keyDown, bool isVirtualKey) {
                 return Input.SendInput(new Input(new KeyboardInput(key, keyDown, isVirtualKey))) > 0;
+            }
+
+            public static bool SetState(char key, bool keyDown) {
+                return SetState(key, keyDown, Default_VirtualKeys);
             }
 
             public static bool SetState(char key, bool keyDown, bool isVirtualKey) {
@@ -353,11 +361,19 @@ namespace User32Api {
                 return Input.SendInput(new Input(new KeyboardInput(key, keyDown, locale))) > 0;
             }
 
-            public static bool PressKey(ushort key, bool isVirtualKey = true) {
+            public static bool PressKey(ushort key) {
+                return PressKey(key, Default_VirtualKeys);
+            }
+
+            public static bool PressKey(ushort key, bool isVirtualKey) {
                 return SetState(key, true, isVirtualKey);
             }
 
-            public static bool PressKey(char key, bool isVirtualKey = true) {
+            public static bool PressKey(char key) {
+                return PressKey(key, Default_VirtualKeys);
+            }
+
+            public static bool PressKey(char key, bool isVirtualKey) {
                 return SetState(key, true, isVirtualKey);
             }
 
@@ -365,11 +381,19 @@ namespace User32Api {
                 return SetState(key, locale, true);
             }
 
-            public static bool ReleaseKey(ushort key, bool isVirtualKey = true) {
+            public static bool ReleaseKey(ushort key) {
+                return ReleaseKey(key, Default_VirtualKeys);
+            }
+
+            public static bool ReleaseKey(ushort key, bool isVirtualKey) {
                 return SetState(key, false, isVirtualKey);
             }
 
-            public static bool ReleaseKey(char key, bool isVirtualKey = true) {
+            public static bool ReleaseKey(char key) {
+                return ReleaseKey(key, Default_VirtualKeys);
+            }
+
+            public static bool ReleaseKey(char key, bool isVirtualKey) {
                 return SetState(key, false, isVirtualKey);
             }
 
@@ -399,7 +423,11 @@ namespace User32Api {
                 return result;
             }
 
-            public async static Task<bool> TypeKeys(IEnumerable<char> keys, bool useVirtualKeys, int delay = 0, int holdFor = 0) {
+            public async static Task<bool> TypeKeys(IEnumerable<char> keys, int delayBetweenKeys = 0, int holdFor = 0) {
+                return await TypeKeys(keys, Default_VirtualKeys, delayBetweenKeys, holdFor);
+            }
+
+            public async static Task<bool> TypeKeys(IEnumerable<char> keys, bool useVirtualKeys, int delayBetweenKeys = 0, int holdFor = 0) {
                 bool result = true;
                 bool pressedShift = false;
 
@@ -414,7 +442,7 @@ namespace User32Api {
                     await Task.Delay(holdFor);
                     if(!(result = ReleaseKey(vkCode, useVirtualKeys)))
                         break;
-                    await Task.Delay(delay);
+                    await Task.Delay(delayBetweenKeys);
                 }
 
                 if(pressedShift)
@@ -808,7 +836,6 @@ namespace User32Api {
             [DllImport("User32.Dll")]
             private static extern bool SetCursorPos(int x, int y);
             public static uint GetLastError() => Input.GetLastError();
-            public static int GetSystemMetrics(int index) => Input.GetSystemMetrics(index);
             #endregion
 
             #region Delegates and Events
@@ -906,9 +933,32 @@ namespace User32Api {
                     Y = y;
                 }
 
+                public static bool operator ==(Point point1, Point point2) {
+                    return point1.X == point2.X && point1.Y == point2.Y;
+                }
+
+                public static bool operator !=(Point point1, Point point2) {
+                    return !(point1 == point2);
+                }
+
+                public override bool Equals(object obj) {
+                    return base.Equals(obj);
+                }
+
+                public override int GetHashCode() {
+                    // Does it need a better hash?
+                    return base.GetHashCode();
+                }
+
+                public bool Equals(Point point) {
+                    return this == point;
+                }
+
                 public override string ToString() {
                     return $"{{{X}, {Y}}}";
                 }
+
+                
             }
 
             public enum MouseButton {
@@ -931,6 +981,7 @@ namespace User32Api {
                     return pos;
                 }
             }
+            public static Point LastPosition { get; set; } // Only updates when global hooks are enabled
             public static Point PhysicalPosition {
                 get {
                     Point pos = new Point();
@@ -948,6 +999,7 @@ namespace User32Api {
                     return Position.Y;
                 }
             }
+
             #endregion
 
             #region Helper Functions
@@ -987,6 +1039,7 @@ namespace User32Api {
             public static void HookGlobalEvents() {
                 if(GlobalMouseHook != IntPtr.Zero) {
                     System.Diagnostics.Debug.WriteLine("Already Hooked");
+                    Console.WriteLine("Already Hooked");
                     return;
                 }
 
@@ -994,20 +1047,25 @@ namespace User32Api {
 
                 GlobalMouseHook = Input.SetWindowsHookExA(Hooks.WH_MOUSE_LL, GlobalMouseEvent, IntPtr.Zero, 0);
 
-                if(GlobalMouseHook == IntPtr.Zero)
+                if(GlobalMouseHook == IntPtr.Zero) {
                     System.Diagnostics.Debug.WriteLine("Hook Error: " + GetLastError());
-                else
+                    Console.WriteLine("Hook Error: " + GetLastError());
+                } else {
                     System.Diagnostics.Debug.WriteLine("Hook Successfull: " + GlobalMouseHook);
+                    Console.WriteLine("Hook Successfull: " + GlobalMouseHook);
+                }
             }
 
             public static void UnhookGlobalEvents() {
                 if(GlobalMouseHook == IntPtr.Zero) {
                     System.Diagnostics.Debug.WriteLine("Not Hooked");
+                    Console.WriteLine("Not Hooked");
                     return;
                 }
                 GlobalMouseEvent -= OnGlobalMouseEvent;
                 Input.UnhookWindowsHookEx(GlobalMouseHook);
                 System.Diagnostics.Debug.WriteLine("Unhook Successfull: " + GlobalMouseHook);
+                Console.WriteLine("Unhook Successfull: " + GlobalMouseHook);
                 GlobalMouseHook = IntPtr.Zero;
             }
 
@@ -1032,12 +1090,17 @@ namespace User32Api {
                             XButton(type == WM_XBUTTONDOWN);
                             break;
                         case WM_MOUSEMOVE:
+                            if(LastPosition != Position) {
+                                Move?.Invoke(MouseInput.FromPointer(lParam));
+                                LastPosition = Position;
+                            }
                             break;
                         case WM_MOUSEWHEEL:
                         case WM_MOUSEHWHEEL:
                             break;
                         default:
                             System.Diagnostics.Debug.WriteLine("Undefined: " + type);
+                            Console.WriteLine("Undefined: " + type);
                             break;
                     }
                 }
